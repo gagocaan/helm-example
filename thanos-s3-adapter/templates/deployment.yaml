@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "thanos-s3-adapter.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "thanos-s3-adapter.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "thanos-s3-adapter.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "thanos-s3-adapter.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          env:
+            - name: ENDPOINT_ADDRESS
+              value: {{ .Values.endpointAddress | quote }}
+            - name: QUERY_STRING
+              value: {{ .Values.queryString | quote }}
+            - name: QUERY_STEP
+              value: {{ .Values.queryStep | quote }}
+            - name: METRIC_BUCKET
+              value: {{ .Values.metricBucket | quote }}
+            - name: METRIC_NAME
+              value: {{ .Release.Name }}
+            - name: INTERVAL
+              value: {{ .Values.interval | quote }}
+            - name: SCHEDULE
+              value: {{ .Values.schedule | quote }}
+            - name: BACK_TIME
+              value: {{ .Values.backTime | quote }}
+            - name: GIN_MODE
+              value: release
+      {{- if not .Values.secret.enable }}
+          volumeMounts:
+            - mountPath: /root/.aws
+              name: s3-credentials
+      volumes:
+        - name: s3-credentials
+          secret:
+            secretName: {{ .Values.secret.name }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
